@@ -14,7 +14,7 @@ class GestureRecognizer:
             return None
 
         # Y-coordinates comparison (In image coordinates, y=0 is TOP, so y_tip < y_pip means UP)
-        thumb_up = lm_list[4][1] < lm_list[3][1] if lm_list[4][0] < lm_list[17][0] else lm_list[4][1] > lm_list[3][1] # X check for thumb orientation
+        thumb_up = lm_list[4][1] < lm_list[3][1] if lm_list[4][1] < lm_list[17][1] else lm_list[4][1] > lm_list[3][1] # X check for thumb orientation
         index_up = lm_list[8][2] < lm_list[6][2]
         middle_up = lm_list[12][2] < lm_list[10][2]
         ring_up = lm_list[16][2] < lm_list[14][2]
@@ -66,13 +66,13 @@ class GestureRecognizer:
         if states["index"] and not states["middle"] and not states["ring"] and not states["pinky"]:
             return "DRAW"
 
-        # 4. Fist (All fingers down) -> Clear Trigger
-        if not states["index"] and not states["middle"] and not states["ring"] and not states["pinky"]:
-            return "CLEAR"
-
-        # 5. Thumbs up -> Save trigger
+        # 4. Thumbs up (thumb extended, all others down) -> Save trigger
         if states["thumb"] and not states["index"] and not states["middle"] and not states["ring"] and not states["pinky"]:
             return "SAVE"
+
+        # 5. Fist (ALL fingers down including thumb) -> Clear Trigger
+        if not states["thumb"] and not states["index"] and not states["middle"] and not states["ring"] and not states["pinky"]:
+            return "CLEAR"
 
         # Default fallback if hand detected but gesture doesn't match single rule
         return "PAUSE"

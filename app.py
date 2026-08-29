@@ -108,6 +108,16 @@ class AirDrawVideoProcessor(VideoProcessorBase):
         self.smoothed_index_pos = None
         self.prev_time = time.time()
         self.last_gesture = "PAUSE"
+        
+        self.canvas_engine = None
+        self.active_color_name = "Electric Cyan"
+        self.brush_size = 6
+        self.eraser_mode = False
+        
+        # Debounce timers for destructive gestures
+        self.last_clear_time = 0
+        self.last_save_time = 0
+        self.save_triggered = False
 
     def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
         img_bgr = frame.to_ndarray(format="bgr24")
@@ -116,14 +126,17 @@ class AirDrawVideoProcessor(VideoProcessorBase):
         img_bgr = cv2.flip(img_bgr, 1)
         h, w, _ = img_bgr.shape
         
-        canvas_engine = st.session_state.canvas_engine
+        if self.canvas_engine is None:
+            return av.VideoFrame.from_ndarray(img_bgr, format="bgr24")
+            
+        canvas_engine = self.canvas_engine
         canvas_engine.resize_if_needed(w, h)
         
         # Apply Session State Color & Brush settings
-        bgr_color = COLORS_BGR.get(st.session_state.active_color_name, (255, 229, 0))
+        bgr_color = COLORS_BGR.get(self.active_color_name, (255, 229, 0))
         canvas_engine.set_color(bgr_color)
-        canvas_engine.set_brush_size(st.session_state.brush_size)
-        canvas_engine.enable_eraser(st.session_state.eraser_mode)
+        canvas_engine.set_brush_size(self.brush_size)
+        canvas_engine.enable_eraser(self.eraser_mode)
 
         # Process Hand Detection
         processed_frame = self.tracker.find_hands(img_bgr.copy(), draw=True)
@@ -151,9 +164,22 @@ class AirDrawVideoProcessor(VideoProcessorBase):
                 cv2.circle(processed_frame, self.smoothed_index_pos, canvas_engine.eraser_size, (50, 50, 255), 2)
 
             elif gesture == "CLEAR":
-                canvas_engine.clear()
+                now = time.time()
+                if now - self.last_clear_time > 1.5:
+                    canvas_engine.clear()
+                    self.last_clear_time = now
                 canvas_engine.end_stroke()
                 self.smoothed_index_pos = None
+
+            elif gesture == "SAVE":
+                now = time.time()
+                if now - self.last_save_time > 2.0:
+                    self.save_triggered = True
+                    self.last_save_time = now
+                canvas_engine.end_stroke()
+                # Draw visual save indicator on frame
+                cv2.putText(processed_frame, "SAVED!", (w // 2 - 80, h // 2),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 230, 118), 3, cv2.LINE_AA)
 
             else:
                 canvas_engine.end_stroke()
@@ -168,9 +194,10 @@ class AirDrawVideoProcessor(VideoProcessorBase):
 
         # Draw PIP Floating Preview of raw camera in top right
         pip_w, pip_h = 200, 115
-        pip_frame = cv2.resize(processed_frame, (pip_w, pip_h))
-        output_display[15:15+pip_h, w-15-pip_w:w-15] = pip_frame
-        cv2.rectangle(output_display, (w-15-pip_w, 15), (w-15, 15+pip_h), (0, 229, 255), 1)
+        if w > pip_w + 30 and h > pip_h + 30:
+            pip_frame = cv2.resize(processed_frame, (pip_w, pip_h))
+            output_display[15:15+pip_h, w-15-pip_w:w-15] = pip_frame
+            cv2.rectangle(output_display, (w-15-pip_w, 15), (w-15, 15+pip_h), (0, 229, 255), 1)
 
         # Draw status badge
         output_display = draw_status_badge(
@@ -184,6 +211,25 @@ class AirDrawVideoProcessor(VideoProcessorBase):
 
 
 def main():
+    # Onboarding overlay on first load
+    if "onboarding_shown" not in st.session_state:
+        st.session_state.onboarding_shown = False
+    
+    if not st.session_state.onboarding_shown:
+        with st.container():
+            st.info(
+                "**Welcome to AirDraw!** 👋\n\n"
+                "Show **☝️ Index finger** to draw in the air · "
+                "Show **✋ Open palm** to pause · "
+                "**🤏 Pinch** to erase · "
+                "**✊ Fist** to clear · "
+                "**👍 Thumbs up** to save\n\n"
+                "Click **START** on the video feed below to begin!"
+            )
+            if st.button("✅ Got it!", key="dismiss_onboarding"):
+                st.session_state.onboarding_shown = True
+                st.rerun()
+
     # Header Banner
     st.markdown("""
     <div class="header-card">
@@ -279,7 +325,7 @@ def main():
         st.markdown("### 🖥️ Virtual Canvas & AR Video Feed")
         
         # WebRTC Live Streaming Component
-        webrtc_streamer(
+        ctx = webrtc_streamer(
             key="airdraw",
             mode=WebRtcMode.SENDRECV,
             rtc_configuration=RTCConfiguration(
@@ -289,6 +335,17 @@ def main():
             media_stream_constraints={"video": True, "audio": False},
             async_processing=True
         )
+
+        if ctx.video_processor:
+            ctx.video_processor.canvas_engine = st.session_state.canvas_engine
+            ctx.video_processor.active_color_name = st.session_state.active_color_name
+            ctx.video_processor.brush_size = st.session_state.brush_size
+            ctx.video_processor.eraser_mode = st.session_state.eraser_mode
+            
+            # Check if SAVE gesture was triggered in the video thread
+            if ctx.video_processor.save_triggered:
+                ctx.video_processor.save_triggered = False
+                st.toast("Artwork saved via 👍 gesture!", icon="💾")
 
 if __name__ == "__main__":
     main()

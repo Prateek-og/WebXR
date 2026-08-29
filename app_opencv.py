@@ -31,6 +31,10 @@ def main():
     current_color_idx = 0
     canvas.set_color(COLORS_BGR[color_keys[current_color_idx]])
     
+    # Debounce timers for destructive gestures
+    last_clear_time = 0
+    last_save_time = 0
+    
     print("=" * 60)
     print(" ✏️  AIRDRAW — Desktop OpenCV Mode Started")
     print("=" * 60)
@@ -40,6 +44,7 @@ def main():
     print("  - 🤏 Pinch         : Eraser Mode")
     print("  - ✌️ Two Fingers   : Hover Mode")
     print("  - ✊ Fist          : Clear Canvas")
+    print("  - 👍 Thumbs Up    : Save Artwork")
     print(" Shortcuts:")
     print("  - 'c' : Clear Canvas")
     print("  - 'u' : Undo")
@@ -85,9 +90,23 @@ def main():
                 cv2.circle(processed_frame, smoothed_index_pos, canvas.eraser_size, (50, 50, 255), 2)
                 
             elif gesture == "CLEAR":
-                canvas.clear()
+                now = time.time()
+                if now - last_clear_time > 1.5:
+                    canvas.clear()
+                    last_clear_time = now
                 canvas.end_stroke()
                 smoothed_index_pos = None
+
+            elif gesture == "SAVE":
+                now = time.time()
+                if now - last_save_time > 2.0:
+                    cv2.imwrite("airdraw_output.png", canvas.canvas)
+                    print("💾 Saved drawing to airdraw_output.png (via 👍 gesture)")
+                    last_save_time = now
+                canvas.end_stroke()
+                # Draw visual save indicator on frame
+                cv2.putText(processed_frame, "SAVED!", (w // 2 - 80, h // 2),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 230, 118), 3, cv2.LINE_AA)
                 
             else:
                 canvas.end_stroke()
@@ -103,9 +122,10 @@ def main():
         
         # Draw floating webcam PIP preview in upper right corner (width 240px)
         pip_w, pip_h = 240, 135
-        pip_frame = cv2.resize(processed_frame, (pip_w, pip_h))
-        output_display[15:15+pip_h, w-15-pip_w:w-15] = pip_frame
-        cv2.rectangle(output_display, (w-15-pip_w, 15), (w-15, 15+pip_h), (0, 229, 255), 1)
+        if w > pip_w + 30 and h > pip_h + 30:
+            pip_frame = cv2.resize(processed_frame, (pip_w, pip_h))
+            output_display[15:15+pip_h, w-15-pip_w:w-15] = pip_frame
+            cv2.rectangle(output_display, (w-15-pip_w, 15), (w-15, 15+pip_h), (0, 229, 255), 1)
 
         # Draw Status Badge top left
         output_display = draw_status_badge(

@@ -2,6 +2,7 @@ import cv2
 import os
 import urllib.request
 import numpy as np
+import time
 import mediapipe as mp
 from mediapipe.tasks.python import vision
 
@@ -29,13 +30,14 @@ class HandTracker:
         base_options = mp.tasks.BaseOptions(model_asset_path=MODEL_PATH)
         options = vision.HandLandmarkerOptions(
             base_options=base_options,
-            running_mode=vision.RunningMode.IMAGE,
+            running_mode=vision.RunningMode.VIDEO,
             num_hands=max_hands,
             min_hand_detection_confidence=detection_con,
             min_hand_presence_confidence=track_con
         )
         self.detector = vision.HandLandmarker.create_from_options(options)
         self.latest_result = None
+        self._frame_timestamp_ms = 0
         
         # Landmark indices reference
         self.INDEX_TIP = 8
@@ -56,7 +58,8 @@ class HandTracker:
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
         
-        self.latest_result = self.detector.detect(mp_image)
+        self._frame_timestamp_ms += 33
+        self.latest_result = self.detector.detect_for_video(mp_image, self._frame_timestamp_ms)
         
         if draw and self.latest_result and self.latest_result.hand_landmarks:
             h, w, _ = frame.shape

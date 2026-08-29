@@ -56,7 +56,7 @@ def draw_status_badge(frame, gesture_key, active_color_bgr=(255, 229, 0), brush_
     cv2.circle(frame, (35, 45), 8, badge_color, -1)
     
     # Status text
-    status_str = f"{emoji} {text}"
+    status_str = f"Status: {text}"
     cv2.putText(frame, status_str, (55, 52), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (240, 240, 240), 2, cv2.LINE_AA)
     
     # Active color preview dot & brush size
