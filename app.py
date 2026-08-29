@@ -344,9 +344,14 @@ def main():
         ctx = webrtc_streamer(
             key="airdraw",
             mode=WebRtcMode.SENDRECV,
-            rtc_configuration=RTCConfiguration(
-                {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
-            ),
+            rtc_configuration=RTCConfiguration({
+                "iceServers": [
+                    {"urls": ["stun:stun.l.google.com:19302"]},
+                    {"urls": ["stun:stun1.l.google.com:19302"]},
+                    {"urls": ["stun:stun2.l.google.com:19302"]},
+                    {"urls": ["stun:stun.services.mozilla.com"]}
+                ]
+            }),
             video_processor_factory=AirDrawVideoProcessor,
             media_stream_constraints={"video": True, "audio": False},
             async_processing=True
