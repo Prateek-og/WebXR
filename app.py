@@ -1,3 +1,19 @@
+import os
+import sys
+
+# --- Streamlit Cloud / MediaPipe Hack ---
+# MediaPipe forces the installation of 'opencv-contrib-python' (the GUI version), 
+# which crashes on Streamlit Cloud due to missing system UI libraries.
+# We intercept the ImportError and forcibly swap it for the headless version.
+try:
+    import cv2
+except ImportError:
+    print("OpenCV GUI version failed to import. Falling back to headless...")
+    os.system(f"{sys.executable} -m pip uninstall -y opencv-python opencv-contrib-python opencv-python-headless opencv-contrib-python-headless")
+    os.system(f"{sys.executable} -m pip install opencv-contrib-python-headless==4.10.0.84")
+    import cv2
+# -----------------------------------------
+
 import streamlit as st
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration, WebRtcMode
 import av
